@@ -1,0 +1,466 @@
+---
+title: "Differential Protein Expression in Hepatocellular Carcinoma (HCC)"
+author: "Jian Liu"
+date: "4/6/2021"
+output:
+  html_document:
+    code_folding: "show"
+---
+
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(broom)
+library(limma)
+library(tidyverse)
+library(cowplot)
+library(genefilter)
+```
+#### Preprocess set1_100919 table by selecting Master == "IsMasterProtein", and Abundance:F6:126, Sample != "0.0", or " ", reducing row numbers from **32041** to **7217**. The final clean table is s1_1.txt
+
+```{r proprocessing set1_100919 table}
+set1_1 <- read.table("Lumos1_MH_set1_100919_Fr_Proteins.txt", sep="\t", header=TRUE)
+set1_1_Master <- filter(set1_1, Master == "IsMasterProtein")
+set1_1_Master_126 <- filter(set1_1_Master, Abundance..F6..126..Sample != " ")
+set1_1_Master_126_0 <- filter(set1_1_Master, Abundance..F6..126..Sample != "0.0")
+
+# the outcomes of set1_1_Master_126 and set1_1_Master_126_0 are the same.
+
+s1_1 = data.frame()[1:7217, ] #creating an empty data.frame of row numbers = 7217
+s1_1$Accession <- set1_1_Master_126$Accession #adding the selected columns with new column names
+
+s1_1$pooled <- set1_1_Master_126$Abundance..F6..126..Sample
+s1_1$P1 <- set1_1_Master_126$Abundance..F6..127N..Sample
+s1_1$P3 <- set1_1_Master_126$Abundance..F6..127C..Sample
+s1_1$P4 <- set1_1_Master_126$Abundance..F6..128N..Sample
+s1_1$P5 <- set1_1_Master_126$Abundance..F6..128C..Sample
+s1_1$N1 <- set1_1_Master_126$Abundance..F6..129N..Sample
+s1_1$N3 <- set1_1_Master_126$Abundance..F6..129C..Sample
+s1_1$N4 <- set1_1_Master_126$Abundance..F6..130N..Sample
+s1_1$N5 <- set1_1_Master_126$Abundance..F6..130C..Sample
+s1_1$P6 <- set1_1_Master_126$Abundance..F6..131..Sample
+
+# s1_1 is now a clean table with the original untransformed values and dimension (7217, 11)
+
+#transform value by normalizing to "pooled 126"
+s1_1$tP1 <- s1_1$P1/s1_1$pooled
+s1_1$tP3 <- s1_1$P3/s1_1$pooled
+s1_1$tP4 <- s1_1$P4/s1_1$pooled
+s1_1$tP5 <- s1_1$P5/s1_1$pooled
+s1_1$tN1 <- s1_1$N1/s1_1$pooled
+s1_1$tN3 <- s1_1$N3/s1_1$pooled
+s1_1$tN4 <- s1_1$N4/s1_1$pooled
+s1_1$tN5 <- s1_1$N5/s1_1$pooled
+s1_1$tP6 <- s1_1$P6/s1_1$pooled
+
+# remove unwanted columns
+
+s1_1 <- subset(s1_1, select=-c(pooled, P1, P3, P4, P5, N1, N3, N4, N5, P6))
+s1_1 <- rename(s1_1, P1=tP1, P3=tP3, P4=tP4, P5=tP5, N1=tN1, N3=tN3, N4=tN4, N5=tN5, P6=tP6)
+head(s1_1)
+write.table(s1_1, "s1_1.txt", sep="\t", row.names=FALSE)
+
+# s1_1 now is a clean table with normalized value ready to be merged with other tables for analysis.
+```
+#### Preprocess set2_101819 table by selecting Master == "IsMasterProtein", and Abundance:F9:126, Sample != "0.0", or " ", reducing row numbers from **32246** to **7327**. The final clean table is s2_1.txt
+```{r preprocessing set2_101819 table}
+set2_1 <- read.table("Lumos1_MH_set2_101819_Fr_Proteins.txt", sep="\t", header=TRUE)
+set2_1_Master <- filter(set2_1, Master == "IsMasterProtein")
+set2_1_Master_126 <- filter(set2_1_Master, Abundance..F9..126..Sample != " ")
+set2_1_Master_126_0 <- filter(set2_1_Master, Abundance..F9..126..Sample != "0.0")
+dim(set2_1)
+dim(set2_1_Master)
+dim(set2_1_Master_126)
+dim(set2_1_Master_126_0)
+
+s2_1 = data.frame()[1:7327, ]
+s2_1$Accession <- set2_1_Master_126$Accession
+
+s2_1$pooled <- set2_1_Master_126$Abundance..F9..126..Sample
+s2_1$P1 <- set2_1_Master_126$Abundance..F9..127N..Sample
+s2_1$P3 <- set2_1_Master_126$Abundance..F9..127C..Sample
+s2_1$P4 <- set2_1_Master_126$Abundance..F9..128N..Sample
+s2_1$P5 <- set2_1_Master_126$Abundance..F9..128C..Sample
+s2_1$N1 <- set2_1_Master_126$Abundance..F9..129N..Sample
+s2_1$N3 <- set2_1_Master_126$Abundance..F9..129C..Sample
+s2_1$N4 <- set2_1_Master_126$Abundance..F9..130N..Sample
+s2_1$N5 <- set2_1_Master_126$Abundance..F9..130C..Sample
+s2_1$P6 <- set2_1_Master_126$Abundance..F9..131..Sample
+
+# s2_1 is now a clean table with the original untransformed values and dimension (7327, 11)
+
+#transform value by normalizing to "pooled 126"
+
+s2_1$tP1 <- s2_1$P1/s2_1$pooled
+s2_1$tP3 <- s2_1$P3/s2_1$pooled
+s2_1$tP4 <- s2_1$P4/s2_1$pooled
+s2_1$tP5 <- s2_1$P5/s2_1$pooled
+s2_1$tN1 <- s2_1$N1/s2_1$pooled
+s2_1$tN3 <- s2_1$N3/s2_1$pooled
+s2_1$tN4 <- s2_1$N4/s2_1$pooled
+s2_1$tN5 <- s2_1$N5/s2_1$pooled
+s2_1$tP6 <- s2_1$P6/s2_1$pooled
+
+# remove unwanted columns
+
+s2_1 <- subset(s2_1, select=-c(pooled, P1, P3, P4, P5, N1, N3, N4, N5, P6))
+s2_1 <- rename(s2_1, P1=tP1, P3=tP3, P4=tP4, P5=tP5, N1=tN1, N3=tN3, N4=tN4, N5=tN5, P6=tP6)
+head(s2_1)
+write.table(s2_1, "s2_1.txt", sep="\t", row.names=FALSE)
+
+# s2_1 now is a clean table with normalized values ready to be merged with other tables for analysis.
+```
+#### Preprocess set1_102119 table by selecting Master == "IsMasterProtein", and Abundance:F6:126, Sample != "0.0", or " ", reducing row numbers from **33580** to **7620**. The final clean table is s1_2.txt
+```{r preprocess set1_102119 table}
+set1_2 <- read.table("Lumos1_MH_set1_102119_Fr_Proteins.txt", sep="\t", header=TRUE)
+set1_2_Master <- filter(set1_2, Master == "IsMasterProtein")
+set1_2_Master_126 <- filter(set1_2_Master, Abundance..F8..126..Sample != " ")
+set1_2_Master_126_0 <- filter(set1_2_Master, Abundance..F8..126..Sample != "0.0")
+
+dim(set1_2)
+dim(set1_2_Master)
+dim(set1_2_Master_126)
+dim(set1_2_Master_126_0)
+
+s1_2 = data.frame()[1:7620, ]
+s1_2$Accession <- set1_2_Master_126$Accession
+
+s1_2$pooled <- set1_2_Master_126$Abundance..F8..126..Sample
+s1_2$P7 <- set1_2_Master_126$Abundance..F8..127N..Sample
+s1_2$P8 <- set1_2_Master_126$Abundance..F8..127C..Sample
+s1_2$P9 <- set1_2_Master_126$Abundance..F8..128N..Sample
+s1_2$P10 <- set1_2_Master_126$Abundance..F8..128C..Sample
+s1_2$N7 <- set1_2_Master_126$Abundance..F8..129N..Sample
+s1_2$N8 <- set1_2_Master_126$Abundance..F8..129C..Sample
+s1_2$N9 <- set1_2_Master_126$Abundance..F8..130N..Sample
+s1_2$N10 <- set1_2_Master_126$Abundance..F8..130C..Sample
+s1_2$P6 <- set1_2_Master_126$Abundance..F8..131..Sample
+
+s1_2$tP7 <- s1_2$P7/s1_2$pooled
+s1_2$tP8 <- s1_2$P8/s1_2$pooled
+s1_2$tP9 <- s1_2$P9/s1_2$pooled
+s1_2$tP10 <- s1_2$P10/s1_2$pooled
+s1_2$tN7 <- s1_2$N7/s1_2$pooled
+s1_2$tN8 <- s1_2$N8/s1_2$pooled
+s1_2$tN9 <- s1_2$N9/s1_2$pooled
+s1_2$tN10 <- s1_2$N10/s1_2$pooled
+s1_2$tP6 <- s1_2$P6/s1_2$pooled
+
+s1_2 <- subset(s1_2, select=-c(pooled, P7, P8, P9, P10, N7, N8, N9, N10, P6))
+s1_2 <- rename(s1_2, P7=tP7, P8=tP8, P9=tP9, P10=tP10, N7=tN7, N8=tN8, N9=tN9, N10=tN10, P6=tP6)
+head(s2_1)
+
+write.table(s1_2, "s1_2.txt", sep="\t", row.names=FALSE)
+ 
+head(read.table("s1_2.txt", sep="\t"))
+
+# s1_2 now is a clean table with normalized values ready to be merged with other tables for analysis.
+```
+#### Preprocess set2_102419 table by selecting Master == "IsMasterProtein", and Abundance:F6:126, Sample != "0.0", or " ", reducing row numbers from **30873** to **7024**. The final clean table is s2_2.txt
+```{r preprocessing set2_102419 table}
+set2_2 <- read.table("Lumos1_MH_set2_102419_Fr_Proteins.txt", sep="\t", header=TRUE)
+set2_2_Master <- filter(set2_2, Master == "IsMasterProtein")
+set2_2_Master_126 <- filter(set2_2_Master, Abundance..F7..126..Sample != " ")
+set2_2_Master_126_0 <- filter(set2_2_Master, Abundance..F7..126..Sample != "0.0")
+dim(set2_2)
+dim(set2_2_Master)
+dim(set2_2_Master_126)
+dim(set2_2_Master_126_0)
+
+s2_2 = data.frame()[1:7024, ]
+s2_2$Accession <- set2_2_Master_126$Accession
+
+s2_2$pooled <- set2_2_Master_126$Abundance..F7..126..Sample
+s2_2$P7 <- set2_2_Master_126$Abundance..F7..127N..Sample
+s2_2$P8 <- set2_2_Master_126$Abundance..F7..127C..Sample
+s2_2$P9 <- set2_2_Master_126$Abundance..F7..128N..Sample
+s2_2$P10 <- set2_2_Master_126$Abundance..F7..128C..Sample
+s2_2$N7 <- set2_2_Master_126$Abundance..F7..129N..Sample
+s2_2$N8 <- set2_2_Master_126$Abundance..F7..129C..Sample
+s2_2$N9 <- set2_2_Master_126$Abundance..F7..130N..Sample
+s2_2$N10 <- set2_2_Master_126$Abundance..F7..130C..Sample
+s2_2$P6 <- set2_2_Master_126$Abundance..F7..131..Sample
+
+s2_2$tP7 <- s2_2$P7/s2_2$pooled
+s2_2$tP8 <- s2_2$P8/s2_2$pooled
+s2_2$tP9 <- s2_2$P9/s2_2$pooled
+s2_2$tP10 <- s2_2$P10/s2_2$pooled
+s2_2$tN7 <- s2_2$N7/s2_2$pooled
+s2_2$tN8 <- s2_2$N8/s2_2$pooled
+s2_2$tN9 <- s2_2$N9/s2_2$pooled
+s2_2$tN10 <- s2_2$N10/s2_2$pooled
+s2_2$tP6 <- s2_2$P6/s2_2$pooled
+
+s2_2 <- subset(s2_2, select=-c(pooled, P7, P8, P9, P10, N7, N8, N9, N10, P6))
+s2_2 <- rename(s2_2, P7=tP7, P8=tP8, P9=tP9, P10=tP10, N7=tN7, N8=tN8, N9=tN9, N10=tN10, P6=tP6)
+head(s2_2)
+
+write.table(s2_2, "s2_2.txt", sep="\t", row.names=FALSE)
+
+# s2_2 now is a clean table with normalized values ready to be merged with other tables for analysis.
+```
+#### Merge four tables into one master Table
+
+```{r merge 4 datasets}
+#retrieve saved table as the original data.frame:
+
+s1_1 <- read.table("s1_1.txt", sep="\t", header=TRUE)
+s1_2 <- read.table("s1_2.txt", sep="\t", header=TRUE)
+s2_1 <- read.table("s2_1.txt", sep="\t", header=TRUE)
+s2_2 <- read.table("s2_2.txt", sep="\t", header=TRUE)
+
+# Further rename columns in the tables so each value is absolutely unique
+s1_1 <- rename(s1_1, P1.1=P1, P3.1=P3, P4.1=P4, P5.1=P5, N1.1=N1, N3.1=N3, N4.1=N4, N5.1=N5, P6.1=P6)
+s2_1 <- rename(s2_1, P1.2=P1, P3.2=P3, P4.2=P4, P5.2=P5, N1.2=N1, N3.2=N3, N4.2=N4, N5.2=N5, P6.2=P6)
+s1_2 <- rename(s1_2, P7.1=P7, P8.1=P8, P9.1=P9, P10.1=P10, N7.1=N7, N8.1=N8, N9.1=N9, N10.1=N10, P6.3=P6)
+s2_2 <- rename(s2_2, P7.2=P7, P8.2=P8, P9.2=P9, P10.2=P10, N7.2=N7, N8.2=N8, N9.2=N9, N10.2=N10, P6.4=P6)
+
+write.table(s1_1, "s1_1r.txt", sep="\t", col.names=TRUE)
+write.table(s1_2, "s1_2r.txt", sep="\t", col.names=TRUE)
+write.table(s2_1, "s2_1r.txt", sep="\t", col.names=TRUE)
+write.table(s2_2, "s2_2r.txt", sep="\t", col.names=TRUE)
+
+s1 <- merge(s1_1, s1_2, by="Accession", all=TRUE)
+dim(s1)
+
+s2 <- merge(s2_1, s2_2, by="Accession", all=TRUE)
+dim(s2)
+
+both <- merge(s1, s2, by="Accession", all=TRUE)
+dim(both)
+
+write.table(s1, "set1.txt", sep="t", col.names=TRUE)
+write.table(s2, "set2.txt", sep="t", col.names=TRUE)
+write.table(both, "both.txt", sep="t", col.names=TRUE)
+
+# remove NAs from the dataset
+# "both" has missing values and rows with missing values need to be removed before analysis
+head(is.na(both)) #show missing values as "TRUE"
+head(which(is.na(both)))  #returns the positions with missing values in your vector.
+
+both_rm <- na.omit(both) # remove rows with NA
+row.names(both_rm) = both_rm$Accession
+both_rm <- subset(both_rm, select=-c(Accession))
+write.table(both_rm, "both_rm.txt", sep="\t", col.names=TRUE, row.names=TRUE)
+edata = both_rm
+
+# create expression table with averaged values of technical replicates for all samples: both_ave
+
+both_rm$P1 =(both_rm$P1.1 + both_rm$P1.2)/2
+both_rm$P3 =(both_rm$P3.1 + both_rm$P3.2)/2
+both_rm$P4 =(both_rm$P4.1 + both_rm$P4.2)/2
+both_rm$P5 =(both_rm$P5.1 + both_rm$P5.2)/2
+both_rm$N5 =(both_rm$N5.1 + both_rm$N5.2)/2
+both_rm$N4 =(both_rm$N4.1 + both_rm$N4.2)/2
+both_rm$N3 =(both_rm$N3.1 + both_rm$N3.2)/2
+both_rm$N1 =(both_rm$N1.1 + both_rm$N1.2)/2
+both_rm$N7 =(both_rm$N7.1 + both_rm$N7.2)/2
+both_rm$N8 =(both_rm$N8.1 + both_rm$N8.2)/2
+both_rm$N9 =(both_rm$N9.1 + both_rm$N9.2)/2
+both_rm$N10 =(both_rm$N10.1 + both_rm$N10.2)/2
+both_rm$P10 =(both_rm$P10.1 + both_rm$P10.2)/2
+both_rm$P9 =(both_rm$P9.1 + both_rm$P9.2)/2
+both_rm$P8 =(both_rm$P8.1 + both_rm$P8.2)/2
+both_rm$P7 =(both_rm$P7.1 + both_rm$P7.2)/2
+both_rm$P6 =(both_rm$P6.1 + both_rm$P6.2 + both_rm$P6.3 + both_rm$P6.4 )/4
+
+both_ave <- subset(both_rm, select=c(N1, N3, N4, N5, N7, N8, N9, N10, P1, P3, P4, P5, P7, P8, P9, P10, P6))
+
+write.table(both_ave, "both_ave.txt", sep="\t", col.names=TRUE, row.names=TRUE)
+```
+#### Exploratory Analysis: Boxplot, PCA and Multiple Linear Regression
+Boxplot
+```{r boxplot}
+df_both_ave <- both_ave %>% gather(sample_id, p_expr) #rearrange both_ave for ggplot
+head(df_both_ave)
+
+df_both_ave$tis <- df_both_ave$sample_id
+tis <- c(N1="liver", N3="liver", N4="liver", N5="liver", N7="liver", N8="liver", N9="liver", N10="liver", P1="HCC", P3="HCC", P4="HCC", P5 = "HCC", P7 = "HCC", P8 = "HCC", P9 = "HCC", P10 = "HCC", P6 = "HCC")
+df_both_ave$tissue <- as.character(tis[df_both_ave$tis])
+head(df_both_ave)
+df_both_ave <- subset(df_both_ave, select= -c(tis))
+head(df_both_ave) # rearranged both_ave table with tissue info for ggplot.
+dim(df_both_ave)
+write.table(df_both_ave, "both_ave_tissue.txt", sep = "\t", col.names=TRUE)
+
+df_both_ave %>% ggplot(aes(x=sample_id, y=p_expr)) + geom_boxplot(aes(colour = tissue)) # overall expression between HCC and liver 
+```
+PCA
+```{r svd}
+library(genefilter)
+pdata_ave <- read.csv("phenotype_ave.csv", all=TRUE)
+edata_ave = both_ave
+dim(edata_ave)
+dim(pdata_ave)
+
+edata_ave_ctr = edata_ave - rowMeans(edata_ave)
+svd1 = svd(edata_ave_ctr)
+names(svd1)
+svd1$d  # is a vector of 17 values
+df_d <- as.data.frame(svd1$d) # change vector to a column
+df_d$index <- as.numeric(row.names(df_d)) #add index column
+
+write.table(df_d, "svd_d.txt", sep="\t", col.names=TRUE)
+
+p10 <- df_d %>% ggplot(aes(x=index, y=svd1$d)) + geom_point(color = "#D16103", size = 2.0) + scale_y_continuous(name="Singular Values")
+p11 <- df_d %>% ggplot(aes(x=index, y=svd1$d^2/sum(svd1$d^2))) + geom_point(color = "#00AFBB", size=2.0) + scale_y_continuous(name="Percent Variance Explained")
+plot_grid(p10, p11, labels = c('A', 'B'), ncol=1, nrow=2)
+
+dim(svd1$v)
+class(svd1$v)  #matrix
+
+colnames(svd1$v) = c("PC1", "PC2", "PC3", "PC4", "PC5", "PC6", "PC7", "PC8", "PC9", "PC10", "PC11", "PC12", "PC13", "PC14", "PC15", "PC16", "PC17")
+rownames(svd1$v) = c("N1", "N3", "N4", "N5", "N7", "N8", "N9", "N10", "P1", "P3", "P4", "P5", "P7", "P8", "P9", "P10", "P6")
+df_v = data.frame(svd1$v)
+df_v$sample_id = rownames(svd1$v)
+df_v$tissue = c("liver", "liver", "liver", "liver", "liver", "liver", "liver", "liver", "HCC", "HCC", "HCC", "HCC", "HCC", "HCC", "HCC", "HCC", "HCC")
+df_v$batch = c("b1", "b1", "b1", "b1", "b2", "b2", "b2", "b2", "b1", "b1", "b1", "b1", "b2", "b2", "b2", "b2", "b3")
+df_v$indiv = c("i1", "i3", "i4", "i5", "i7", "i8", "i9", "i10", "i1", "i3", "i4", "i5", "i7", "i8", "i9", "i10", "i6")
+df_v
+
+write.table(df_v, "svd_v.txt", sep="\t", col.names=TRUE, row.names=TRUE)
+
+p20 <- df_v %>% ggplot(aes(x=sample_id, y=PC1)) + geom_point(aes(color=tissue)) 
+p21 <- df_v %>% ggplot(aes(x=sample_id, y=PC1)) + geom_point(aes(color=batch)) 
+p22 <- df_v %>% ggplot(aes(x=sample_id, y=PC1)) + geom_point(aes(color=indiv)) 
+
+p23 <- df_v %>% ggplot(aes(x=sample_id, y=PC2)) + geom_point(aes(color=tissue)) 
+p24 <- df_v %>% ggplot(aes(x=sample_id, y=PC2)) + geom_point(aes(color=batch)) 
+p25 <- df_v %>% ggplot(aes(x=sample_id, y=PC2)) + geom_point(aes(color=indiv)) 
+
+plot_grid(p20, p21, p23, p24, labels=c("A", "B", "C", "D"), nrow=2, ncol=2)
+
+p26 <- df_v %>% ggplot(aes(x=sample_id, y=PC3)) + geom_point(aes(color=tissue)) 
+p27 <- df_v %>% ggplot(aes(x=sample_id, y=PC3)) + geom_point(aes(color=batch)) 
+p28 <- df_v %>% ggplot(aes(x=sample_id, y=PC3)) + geom_point(aes(color=indiv))
+
+p29 <- df_v %>% ggplot(aes(x=sample_id, y=PC4)) + geom_point(aes(color=tissue)) 
+p30 <- df_v %>% ggplot(aes(x=sample_id, y=PC4)) + geom_point(aes(color=batch)) 
+p31 <- df_v %>% ggplot(aes(x=sample_id, y=PC4)) + geom_point(aes(color=indiv))
+
+plot_grid(p26, p27, p29, p30, labels=c("E", "F", "G", "H"), nrow=2, ncol=2)
+
+p32 <- df_v %>% ggplot(aes(x=sample_id, y=PC16)) + geom_point(aes(color=tissue)) 
+p33 <- df_v %>% ggplot(aes(x=sample_id, y=PC16)) + geom_point(aes(color=batch)) 
+p34 <- df_v %>% ggplot(aes(x=sample_id, y=PC16)) + geom_point(aes(color=indiv))
+
+p35 <- df_v %>% ggplot(aes(x=sample_id, y=PC17)) + geom_point(aes(color=tissue)) 
+p36 <- df_v %>% ggplot(aes(x=sample_id, y=PC17)) + geom_point(aes(color=batch)) 
+p37 <- df_v %>% ggplot(aes(x=sample_id, y=PC17)) + geom_point(aes(color=indiv))
+
+plot_grid(p32, p33, p35, p36, labels=c("I", "J", "K", "L"), nrow=2, ncol=2)
+
+plot_grid(p22, p25, p28, p31, labels=c("M", "N", "O", "P"), nrow=2, ncol=2)
+plot_grid(p34, p37, labels=c("Q", "R"), nrow=2, ncol=2)
+
+p40 <- df_v %>% ggplot(aes(x=PC1, y=PC2)) + geom_point(aes(color=tissue))
+p41 <- df_v %>% ggplot(aes(x=PC1, y=PC2)) + geom_point(aes(color=batch))
+p42 <- df_v %>% ggplot(aes(x=PC1, y=PC2)) + geom_point(aes(color=indiv))
+
+p43 <- df_v %>% ggplot(aes(x=PC3, y=PC4)) + geom_point(aes(color=tissue))
+p44 <- df_v %>% ggplot(aes(x=PC3, y=PC4)) + geom_point(aes(color=batch))
+p45 <- df_v %>% ggplot(aes(x=PC3, y=PC4)) + geom_point(aes(color=indiv))
+
+p46 <- df_v %>% ggplot(aes(x=PC16, y=PC17)) + geom_point(aes(color=tissue))
+p47 <- df_v %>% ggplot(aes(x=PC16, y=PC17)) + geom_point(aes(color=batch))
+p48 <- df_v %>% ggplot(aes(x=PC16, y=PC17)) + geom_point(aes(color=indiv))
+
+plot_grid(p40, p41, p43, p44, labels=c("a", "b", "c", "d"), nrow=2, ncol=2)
+plot_grid(p46, p47, p42, p45, labels=c("e", "f", "g", "h"), nrow=2, ncol=2)
+p48
+
+```
+Multiple Linear Regression Models
+```{r diff expr}
+# edata_ave = both_ave
+# pdata_ave <- read.csv("phenotype_ave.csv", all=TRUE)
+# head(pdata_ave)
+pdata_ave$tissue = as.factor(pdata_ave$tissue)
+pdata_ave$batch = as.factor(pdata_ave$batch)
+pdata_ave$individual = as.factor(pdata_ave$individual)
+
+pdata_ave$tissue  # Levels: HCC liver indicating logFC will be from liver to HCC, ordinarily, we would like to see logFC is from HCC to liver need to use contrast.matrix 
+
+design1 = model.matrix(~pdata_ave$tissue)
+design2 = model.matrix(~pdata_ave$tissue - 1)
+head(design2)
+
+colnames(design2) <- c("HCC", "liver")
+
+fit1 <- lmFit(edata_ave, design1)
+fit2 <- lmFit(edata_ave, design2)
+contrast.matrix <- makeContrasts("HCC-liver", levels=design2)
+contrast.matrix
+
+fit2C <- contrasts.fit(fit2, contrast.matrix)
+fit1 = eBayes(fit1)
+fit2 = eBayes(fit2)
+fit2C = eBayes(fit2C)
+
+topTable(fit1)
+topTable(fit2) #this output is different from those from fit1 and fit2C
+topTable(fit2C) # the logFC values are the (-) of those from fit1, in this case HCC vs. liver
+
+toptable2C <- topTable(fit2C, number=dim(edata_ave)[1], sort.by = "p") # or
+toptable2C <- topTable(fit2C, number=dim(edata_ave)[1], sort.by = "p", coef=1)
+head(toptable2C)
+dim(toptable2C)
+
+write.table(toptable2C, "diff_HCC_liver.txt", sep="\t", col.names=TRUE, row.names=TRUE)
+
+diff_q0.05 <- subset(toptable2C, toptable2C$adj.P.Val < 0.05)
+dim(diff_q0.05)
+
+write.table(diff_q0.05, "diff_q0.05.txt", sep="\t", col.names=TRUE, row.names=TRUE)
+
+p0 <- toptable2C %>% ggplot(aes(x=logFC, y=-log10(P.Value), color=adj.P.Val < 0.05)) + geom_point(size = 0.75)
+p0
+
+toptable2C$clr1 <- paste(toptable2C$logFC > 1.0, toptable2C$adj.P.Val < 0.05)
+toptable2C$clr2 <- paste(toptable2C$logFC < -1.0, toptable2C$adj.P.Val < 0.05)
+
+p1 <-toptable2C %>% ggplot(aes(x=logFC, y=-log10(P.Value), color=clr1)) + geom_point()
+p1
+p2 <-toptable2C %>% ggplot(aes(x=logFC, y=-log10(P.Value), color=clr2)) + geom_point()
+p2
+
+# head(toptable2C) gives the same rows as those from topTable(fit2C)
+```
+#### obtain gene_symbol for ENSP_id in relevant tables
+
+```{r obtain gene_symbol}
+
+library('biomaRt')
+
+ensembl <- useEnsembl(biomart = "genes", dataset = "hsapiens_gene_ensembl")
+both_ave_Acc <- both_ave #not to change the format in both_ave
+both_ave_Acc$Accession = row.names(both_ave_Acc)
+Accession <- both_ave_Acc$Accession
+gene_symbol <- getBM (filters = "ensembl_peptide_id_version", attributes = c("ensembl_peptide_id_version", "hgnc_symbol"), values = Accession, mart = ensembl)
+both_ave_Acc_symbol <- merge(both_ave_Acc, gene_symbol, by.x="Accession", by.y="ensembl_peptide_id_version")
+
+both_ave_Acc_symbol <- both_ave_Acc_symbol[, c(1, 19, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18)] #rearrange columns
+
+write.table(gene_symbol, "ENSP_to_gene_symbol.txt", sep="\t", col.names=TRUE) # this file will be useful for future proteomics studies
+write.table(both_ave_Acc, "both_ave_Acc.txt", sep="\t", col.names=TRUE)
+write.table(both_ave_Acc_symbol, "both_ave_Acc_symbol.txt", sep="\t", col.names=TRUE) #complete expression dataset with ENSP_id and gene_symbol 
+
+searchAttributes(mart = ensembl, pattern = "hgnc*") # to determine "hgnc_symbol"
+searchFilters(mart = ensembl, pattern = "ensembl.*id") # to determine filter "ensembl_peptide_id_version"
+
+# add gene_symbol to differential protein expression table "toptable2C"
+head(toptable2C)
+toptable2C$Accession <- row.names(toptable2C)
+toptable2C_symbol <- merge(toptable2C, gene_symbol, by.x="Accession", by.y="ensembl_peptide_id_version")
+toptable2C_symbol <- toptable2C_symbol[, c(1, 10, 2, 3, 4, 5, 6, 7, 8, 9)]
+toptable2C_symbol <- arrange(toptable2C_symbol, P.Value) # differential protein expression table with gene_symbol and ordered by p values
+
+write.table(toptable2C_symbol, "diff_HCC_liver_symbol.txt", sep="\t", col.names=TRUE)
+
+#double check the saved files are correct
+head(read.table("diff_HCC_liver_symbol.txt", sep="\t"))
+head(read.table("both_ave_Acc_symbol.txt", sep="\t"))     
+```
+
+
+
